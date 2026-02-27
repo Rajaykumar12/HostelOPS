@@ -69,9 +69,12 @@ jobs:
             
             # 3. Pull the latest images that were just pushed
             docker-compose pull
+
+            # 4. Down the containers
+            docker-compose down
             
-            # 4. Restart the containers with the new images in the background
+            # 5. Restart the containers with the new images in the background
             docker-compose up -d --remove-orphans
             
-            # 5. Clean up old unused images to save disk space
+            # 6. Clean up old unused images to save disk space
             docker image prune -f
