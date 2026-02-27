@@ -1,9 +1,13 @@
 {
   "name": "hostelops-frontend",
   "version": "1.0.0",
+  "proxy": "http://13.204.150.154",
   "dependencies": {
+    "amazon-cognito-identity-js": "^6.3.16",
+    "oidc-client-ts": "^3.4.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-oidc-context": "^3.3.0",
     "react-scripts": "5.0.1"
   },
   "scripts": {

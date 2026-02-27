@@ -1,0 +1,68 @@
+name: CI/CD Pipeline to ECR and EC2
+
+on:
+  push:
+    branches:
+      - main # Workflow runs when you push to the main branch
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REGISTRY: 442897381300.dkr.ecr.ap-south-1.amazonaws.com
+  BACKEND_REPO: namespace/hostelops-backend
+  # FRONTEND_REPO: namespace/hostelops-frontend (Add this when ready)
+
+jobs:
+  build-and-push:
+    name: Build Docker Images and Push to ECR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push Backend Image
+        run: |
+          # Build it with the 'latest' tag and a unique commit ID tag
+          docker build -t $ECR_REGISTRY/$BACKEND_REPO:latest -t $ECR_REGISTRY/$BACKEND_REPO:${{ github.sha }} ./backend
+          
+          # Push both tags to ECR
+          docker push $ECR_REGISTRY/$BACKEND_REPO:latest
+          docker push $ECR_REGISTRY/$BACKEND_REPO:${{ github.sha }}
+
+  deploy:
+    name: Deploy to EC2
+    needs: build-and-push # Ensures this job only runs AFTER the push succeeds
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute remote ssh commands using password
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ECR_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # 1. Log into AWS ECR on the EC2 instance
+            aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 442897381300.dkr.ecr.ap-south-1.amazonaws.com
+            
+            # 2. Navigate to your project directory on EC2 where docker-compose.yml is
+            # YOU MUST CHANGE THIS PATH TO YOUR ACTUAL FOLDER
+            cd /home/ubuntu/HostelOPS 
+            
+            # 3. Pull the latest images that were just pushed
+            docker-compose pull
+            
+            # 4. Restart the containers with the new images in the background
+            docker-compose up -d --remove-orphans
+            
+            # 5. Clean up old unused images to save disk space
+            docker image prune -f
