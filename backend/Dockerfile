@@ -22,4 +22,4 @@ ENV NODE_ENV=production
 EXPOSE 3000
 
 # 8. Start the Express server
-CMD ["node", "index.js"]
+CMD ["node", "server.js"]
