@@ -16,6 +16,13 @@ const sequelize = new Sequelize(
         dialect: 'postgres',
         port: 5432,
         logging: false,
+        // ADD THIS SECTION:
+        dialectOptions: {
+            ssl: {
+                require: true,
+                rejectUnauthorized: false // Necessary for RDS unless you provide a specific CA cert
+            }
+        }
     }
 );
 
