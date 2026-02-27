@@ -9,7 +9,7 @@ env:
   AWS_REGION: ap-south-1
   ECR_REGISTRY: 442897381300.dkr.ecr.ap-south-1.amazonaws.com
   BACKEND_REPO: namespace/hostelops-backend
-  # FRONTEND_REPO: namespace/hostelops-frontend (Add this when ready)
+  FRONTEND_REPO: namespace/hostelops-frontend
 
 jobs:
   build-and-push:
