@@ -1,31 +1,45 @@
 version: '3.8'
 
 services:
-  backend:
-    build: ./backend
+  db:
+    # Using alpine keeps the DB footprint tiny for the 1GB RAM constraint
+    image: postgres:15-alpine
+    container_name: competition_db
     restart: always
     environment:
-      - PORT=5000
-      - DB_HOST=${DB_HOST}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-    expose:
-      - "5000"
-
-  frontend:
-    build: ./frontend
-    restart: always
-    expose:
-      - "80"
-
-  reverse-proxy:
-    image: nginx:alpine
-    restart: always
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: competition_db
     ports:
-      - "80:80"
+      - "5432:5432"
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  backend:
+    build: .
+    container_name: competition_backend
+    restart: always
     depends_on:
-      - frontend
-      - backend
+      - db
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DB_USER=postgres
+      - DB_HOST=db
+      - DB_NAME=competition_db
+      - DB_PASSWORD=supersecret
+      - DB_PORT=5432
+    networks:
+      - app-network
+
+# This ensures database data survives container restarts (Crash resilience)
+volumes:
+  pgdata:
+
+# Custom bridge network for secure internal container communication
+networks:
+  app-network:
+    driver: bridge
