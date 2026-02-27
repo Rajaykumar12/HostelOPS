@@ -1,39 +1,77 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { AuthenticationDetails, CognitoUser, CognitoUserPool, CognitoUserAttribute } from 'amazon-cognito-identity-js';
+
+// --- AWS Cognito Configuration ---
+const poolData = {
+    UserPoolId: 'ap-south-1_npiLuJpaD',
+    ClientId: '3sjhdm7d8ss5knknlbdeuu1f10'
+};
+const userPool = new CognitoUserPool(poolData);
 
 function App() {
-    const [user, setUser] = useState(null);
-    const [complaints, setComplaints] = useState([]);
-
     // Auth State
+    const [user, setUser] = useState(null);
     const [isLoginView, setIsLoginView] = useState(true);
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [regRole, setRegRole] = useState('student');
+    const [name, setName] = useState('');
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [verificationCode, setVerificationCode] = useState('');
     const [authError, setAuthError] = useState('');
     const [authSuccess, setAuthSuccess] = useState('');
+    const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-    // Complaint Form State
+    // Filter & UI State
+    const [complaints, setComplaints] = useState([]);
     const [newComplaint, setNewComplaint] = useState({ category: 'Electrical', description: '', priority: 'Low' });
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // Filter State
     const [filterCategory, setFilterCategory] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
 
-    const fetchComplaints = useCallback(async (currentUser = user) => {
-        if (!currentUser) return;
-        let url = `/api/complaints?role=${currentUser.role}&username=${currentUser.username}`;
+    // --- Restore Session on Load ---
+    useEffect(() => {
+        const cognitoUser = userPool.getCurrentUser();
+        if (cognitoUser != null) {
+            cognitoUser.getSession((err, session) => {
+                if (err) {
+                    setIsLoadingAuth(false);
+                    return;
+                }
+                const idToken = session.getIdToken().getJwtToken();
+                const payload = session.getIdToken().decodePayload();
 
+                setUser({
+                    username: payload['cognito:username'] || payload.email,
+                    role: payload['custom:role'] || 'student',
+                    id_token: idToken,
+                    cognitoUser: cognitoUser
+                });
+                setIsLoadingAuth(false);
+            });
+        } else {
+            setIsLoadingAuth(false);
+        }
+    }, []);
+
+    const fetchComplaints = useCallback(async (currentUser = user) => {
+        if (!currentUser || !currentUser.id_token) return;
+
+        let url = `/api/complaints?role=${currentUser.role}&username=${currentUser.username}`;
         if (currentUser.role === 'admin') {
             if (filterCategory) url += `&category=${filterCategory}`;
             if (filterStatus) url += `&status=${filterStatus}`;
         }
 
         try {
-            const res = await fetch(url);
+            const res = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${currentUser.id_token}` }
+            });
             if (res.ok) {
                 const data = await res.json();
                 setComplaints(data);
+            } else if (res.status === 401) {
+                console.error("Session expired");
+                handleLogout();
             }
         } catch (err) {
             console.error("Failed to fetch complaints", err);
@@ -41,93 +79,165 @@ function App() {
     }, [user, filterCategory, filterStatus]);
 
     useEffect(() => {
-        if (user) {
+        if (user && user.id_token) {
             fetchComplaints(user);
         }
     }, [user, filterCategory, filterStatus, fetchComplaints]);
 
-    const handleLogin = async (e) => {
+    // --- Authentication Actions ---
+    const handleLogin = (e) => {
         e.preventDefault();
         setAuthError('');
-        try {
-            const res = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setUser(data);
-                setUsername('');
+
+        const authenticationDetails = new AuthenticationDetails({ Username: email, Password: password });
+        const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
+
+        cognitoUser.authenticateUser(authenticationDetails, {
+            onSuccess: (result) => {
+                const idToken = result.getIdToken().getJwtToken();
+                const payload = result.getIdToken().decodePayload();
+
+                setUser({
+                    username: payload['cognito:username'] || payload.email,
+                    role: payload['custom:role'] || 'student',
+                    id_token: idToken,
+                    cognitoUser: cognitoUser
+                });
+                setEmail('');
                 setPassword('');
-            } else {
-                setAuthError("Invalid username or password");
+            },
+            onFailure: (err) => {
+                setAuthError(err.message || 'Login failed');
+            },
+            newPasswordRequired: (userAttributes, requiredAttributes) => {
+                // Administrator-created accounts require a password change on first login.
+                // We're forcing it to their freshly entered password to minimize friction.
+                delete userAttributes.email_verified;
+                delete userAttributes.phone_number_verified;
+                delete userAttributes.email;
+                cognitoUser.completeNewPasswordChallenge(password, userAttributes, {
+                    onSuccess: (result) => {
+                        const idToken = result.getIdToken().getJwtToken();
+                        const payload = result.getIdToken().decodePayload();
+
+                        setUser({
+                            username: payload['cognito:username'] || payload.email,
+                            role: payload['custom:role'] || 'student',
+                            id_token: idToken,
+                            cognitoUser: cognitoUser
+                        });
+                        setEmail('');
+                        setPassword('');
+                    },
+                    onFailure: (err) => {
+                        setAuthError(err.message || 'First-time password configuration failed');
+                    }
+                });
             }
-        } catch (err) {
-            setAuthError("Server connection failed");
-        }
+        });
     };
 
-    const handleRegister = async (e) => {
+    const handleRegister = (e) => {
         e.preventDefault();
         setAuthError('');
         setAuthSuccess('');
-        try {
-            const res = await fetch('/api/auth/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password, role: regRole })
-            });
-            if (res.ok) {
-                setAuthSuccess("Registration successful! Please login.");
-                setIsLoginView(true);
-                setPassword('');
-            } else {
-                const errMsg = await res.text();
-                setAuthError(errMsg || "Registration failed");
+
+        const attributeList = [
+            new CognitoUserAttribute({ Name: 'name', Value: name }),
+            new CognitoUserAttribute({ Name: 'email', Value: email }),
+            new CognitoUserAttribute({ Name: 'custom:role', Value: 'student' })
+        ];
+
+        userPool.signUp(email, password, attributeList, null, (err, result) => {
+            if (err) {
+                setAuthError(err.message || 'Registration failed');
+                return;
             }
-        } catch (err) {
-            setAuthError("Server connection failed");
-        }
+            setAuthSuccess('Registration successful! Please check your email for the verification code.');
+            setIsVerifying(true);
+        });
     };
 
+    const handleVerify = (e) => {
+        e.preventDefault();
+        setAuthError('');
+        setAuthSuccess('');
+
+        const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
+
+        cognitoUser.confirmRegistration(verificationCode, true, (err, result) => {
+            if (err) {
+                setAuthError(err.message || 'Verification failed');
+                return;
+            }
+            setAuthSuccess('Verification successful! You can now sign in.');
+            setIsVerifying(false);
+            setIsLoginView(true);
+            setVerificationCode('');
+            setPassword('');
+        });
+    };
+
+    const handleLogout = () => {
+        if (user && user.cognitoUser) {
+            user.cognitoUser.signOut();
+        }
+        setUser(null);
+        setComplaints([]);
+    };
+
+    // --- Data Actions ---
     const submitComplaint = async (e) => {
         e.preventDefault();
+        if (!user || !user.id_token) return;
+
         setIsSubmitting(true);
         try {
             const res = await fetch('/api/complaints', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.id_token}`
+                },
                 body: JSON.stringify({ ...newComplaint, student: user.username })
             });
+
             if (res.ok) {
                 setNewComplaint({ category: 'Electrical', description: '', priority: 'Low' });
                 fetchComplaints();
+            } else {
+                console.error("Failed", await res.text());
             }
         } catch (err) {
-            console.error("Failed to submit complaint", err);
+            console.error(err);
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const updateStatus = async (id, newStatus) => {
+        if (!user || !user.id_token) return;
         try {
-            await fetch(`/api/complaints/${id}`, {
+            const res = await fetch(`/api/complaints/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.id_token}`
+                },
                 body: JSON.stringify({ status: newStatus })
             });
-            fetchComplaints();
+            if (res.ok) fetchComplaints();
         } catch (err) {
-            console.error("Failed to update status", err);
+            console.error(err);
         }
     };
 
-    const handleLogout = () => {
-        setUser(null);
-        setComplaints([]);
-    };
+    const getPriorityClass = (priority) => `badge priority-${priority.toLowerCase()}`;
+    const getStatusClass = (status) => `status-badge status-${status.toLowerCase().replace(' ', '')}`;
+
+    if (isLoadingAuth) {
+        return <div className="auth-container">Loading Configuration...</div>;
+    }
 
     if (!user) {
         return (
@@ -135,17 +245,28 @@ function App() {
                 <div className="auth-card">
                     <div className="auth-logo">
                         <h2>HostelOps</h2>
-                        <p>Smart Complaint Management System</p>
+                        <p>Cloud Managed Identity</p>
                     </div>
 
                     {authError && <div className="error-message">{authError}</div>}
                     {authSuccess && <div className="success-message">{authSuccess}</div>}
 
-                    {isLoginView ? (
+                    {isVerifying ? (
+                        <form className="auth-form" onSubmit={handleVerify}>
+                            <div className="form-group">
+                                <label>Verification Code</label>
+                                <input type="text" placeholder="Enter code from email" value={verificationCode} onChange={e => setVerificationCode(e.target.value)} required />
+                            </div>
+                            <button className="btn btn-primary" type="submit">Verify Account</button>
+                            <div className="auth-toggle">
+                                <button type="button" onClick={() => { setIsVerifying(false); setIsLoginView(true); setAuthError(''); setAuthSuccess(''); setEmail(''); setPassword(''); setName(''); }}>Back to Sign In</button>
+                            </div>
+                        </form>
+                    ) : isLoginView ? (
                         <form className="auth-form" onSubmit={handleLogin}>
                             <div className="form-group">
-                                <label>Username</label>
-                                <input type="text" placeholder="Enter your username" value={username} onChange={e => setUsername(e.target.value)} required />
+                                <label>Email / Username</label>
+                                <input type="text" placeholder="Enter your email" value={email} onChange={e => setEmail(e.target.value)} required />
                             </div>
                             <div className="form-group">
                                 <label>Password</label>
@@ -161,19 +282,16 @@ function App() {
                     ) : (
                         <form className="auth-form" onSubmit={handleRegister}>
                             <div className="form-group">
-                                <label>Username</label>
-                                <input type="text" placeholder="Choose a username" value={username} onChange={e => setUsername(e.target.value)} required />
+                                <label>Name</label>
+                                <input type="text" placeholder="Enter your full name" value={name} onChange={e => setName(e.target.value)} required />
+                            </div>
+                            <div className="form-group">
+                                <label>Email Address</label>
+                                <input type="email" placeholder="Enter your valid email" value={email} onChange={e => setEmail(e.target.value)} required />
                             </div>
                             <div className="form-group">
                                 <label>Password</label>
                                 <input type="password" placeholder="Choose a password" value={password} onChange={e => setPassword(e.target.value)} required />
-                            </div>
-                            <div className="form-group">
-                                <label>Role</label>
-                                <select value={regRole} onChange={e => setRegRole(e.target.value)}>
-                                    <option value="student">Student</option>
-                                    <option value="admin">Administrator</option>
-                                </select>
                             </div>
                             <button className="btn btn-primary" type="submit">Register Account</button>
 
@@ -188,21 +306,10 @@ function App() {
         );
     }
 
-    const getPriorityClass = (priority) => {
-        return `badge priority-${priority.toLowerCase()}`;
-    };
-
-    const getStatusClass = (status) => {
-        const normalized = status.toLowerCase().replace(' ', '');
-        return `status-badge status-${normalized}`;
-    };
-
     return (
         <div className="app-container">
             <header className="navbar">
-                <div className="navbar-brand">
-                    <h1>HostelOps</h1>
-                </div>
+                <div className="navbar-brand"><h1>HostelOps</h1></div>
                 <div className="navbar-user">
                     <span>{user.username}</span>
                     <span className="role-badge">{user.role}</span>
