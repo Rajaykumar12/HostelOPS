@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Clean install of dependencies
-RUN npm ci
+RUN npm install
 
 # Copy the rest of your React code
 COPY . .
