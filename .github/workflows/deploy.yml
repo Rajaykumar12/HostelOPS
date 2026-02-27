@@ -39,6 +39,15 @@ jobs:
           docker push $ECR_REGISTRY/$BACKEND_REPO:latest
           docker push $ECR_REGISTRY/$BACKEND_REPO:${{ github.sha }}
 
+      - name: Build, tag, and push Frontend Image
+        run: |
+          # Build it with the 'latest' tag and a unique commit ID tag
+          docker build -t $ECR_REGISTRY/$FRONTEND_REPO:latest -t $ECR_REGISTRY/$FRONTEND_REPO:${{ github.sha }} ./frontend
+          
+          # Push both tags to ECR
+          docker push $ECR_REGISTRY/$FRONTEND_REPO:latest
+          docker push $ECR_REGISTRY/$FRONTEND_REPO:${{ github.sha }}
+
   deploy:
     name: Deploy to EC2
     needs: build-and-push # Ensures this job only runs AFTER the push succeeds
