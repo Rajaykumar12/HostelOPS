@@ -41,7 +41,7 @@ function App() {
                 const payload = session.getIdToken().decodePayload();
 
                 setUser({
-                    username: payload['cognito:username'] || payload.email,
+                    username: payload.name || payload['cognito:username'] || payload.email,
                     role: payload['custom:role'] || 'student',
                     id_token: idToken,
                     cognitoUser: cognitoUser
@@ -98,7 +98,7 @@ function App() {
                 const payload = result.getIdToken().decodePayload();
 
                 setUser({
-                    username: payload['cognito:username'] || payload.email,
+                    username: payload.name || payload['cognito:username'] || payload.email,
                     role: payload['custom:role'] || 'student',
                     id_token: idToken,
                     cognitoUser: cognitoUser
@@ -121,7 +121,7 @@ function App() {
                         const payload = result.getIdToken().decodePayload();
 
                         setUser({
-                            username: payload['cognito:username'] || payload.email,
+                            username: payload.name || payload['cognito:username'] || payload.email,
                             role: payload['custom:role'] || 'student',
                             id_token: idToken,
                             cognitoUser: cognitoUser
@@ -311,7 +311,6 @@ function App() {
             <header className="navbar">
                 <div className="navbar-brand"><h1>HostelOps</h1></div>
                 <div className="navbar-user">
-                    <span>{user.username}</span>
                     <span className="role-badge">{user.role}</span>
                     <button className="btn btn-outline btn-sm" onClick={handleLogout}>Logout</button>
                 </div>
@@ -427,7 +426,13 @@ function App() {
                                             </div>
 
                                             <div className="complaint-footer">
-                                                <span>Submitted by: <strong>{c.student}</strong> on {new Date(c.createdAt).toLocaleDateString()}</span>
+                                                {user.role === 'admin' ? (
+                                                    <span>Submitted on: <strong>
+                                                        {c.studentName || c.email_verified}
+                                                    </strong> {new Date(c.createdAt).toLocaleDateString()}</span>
+                                                ) : (
+                                                    <span>Submitted on {new Date(c.createdAt).toLocaleDateString()}</span>
+                                                )}
 
                                                 {user.role === 'admin' && (
                                                     <div className="complaint-actions">
@@ -435,10 +440,11 @@ function App() {
                                                         <select
                                                             value={c.status}
                                                             onChange={e => updateStatus(c.id, e.target.value)}
-                                                            className="btn-sm"
+                                                            className={`btn-sm status-select ${c.status === 'Resolved' ? 'resolved' : ''}`}
+                                                            disabled={c.status === 'Resolved'}
                                                         >
-                                                            <option value="Pending">Pending</option>
-                                                            <option value="In Progress">In Progress</option>
+                                                            <option value="Pending" disabled={c.status === 'In Progress' || c.status === 'Resolved'}>Pending</option>
+                                                            <option value="In Progress" disabled={c.status === 'Resolved'}>In Progress</option>
                                                             <option value="Resolved">Resolved</option>
                                                         </select>
                                                     </div>
