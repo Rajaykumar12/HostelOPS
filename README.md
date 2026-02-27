@@ -1,8 +1,8 @@
-# 🏢 HostelOps
+#  HostelOps
 
 HostelOps is a full-stack complaint management system designed to streamline maintenance requests within student accommodations. It features a secure, cloud-native authentication flow using AWS Cognito, role-based access control (RBAC) for Students and Admins, and a containerized deployment architecture using Docker and AWS EC2.
 
-## ✨ Features
+##  Features
 
 * **Cloud-Native Authentication:** Fully integrated with **AWS Cognito** for secure user login, registration, and identity management via JWTs (JSON Web Tokens).
 * **Role-Based Access Control (RBAC):**
@@ -11,7 +11,7 @@ HostelOps is a full-stack complaint management system designed to streamline mai
 * **Secure API:** Backend routes are protected using `jwks-rsa` and `jsonwebtoken` to mathematically verify Cognito ID tokens before interacting with the database.
 * **Containerized Infrastructure:** Both frontend and backend are containerized using Docker and orchestrated via Docker Compose, served behind an Nginx reverse proxy.
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 * **Frontend:** React.js, React Router, `react-oidc-context` (AWS Cognito Hosted UI integration)
 * **Backend:** Node.js, Express.js
@@ -25,7 +25,7 @@ HostelOps is a full-stack complaint management system designed to streamline mai
 
 ---
 
-## 🚀 Architecture overview
+##  Architecture overview
 
 1.  **Authentication:** The React frontend redirects users to the AWS Cognito Hosted UI. Upon successful login, Cognito returns an `id_token`.
 2.  **API Requests:** The frontend attaches the `id_token` as a `Bearer` token in the `Authorization` header for all backend `fetch` requests.
@@ -34,7 +34,7 @@ HostelOps is a full-stack complaint management system designed to streamline mai
 
 ---
 
-## 💻 Local Development Setup
+##  Local Development Setup
 
 ### Prerequisites
 * Node.js (v16+)
