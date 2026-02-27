@@ -40,6 +40,7 @@ const verifyToken = (req, res, next) => {
         // Map Cognito claims to our req.user object
         req.user = {
             username: decoded["cognito:username"] || decoded.email,
+            name: decoded.name || decoded["cognito:username"] || decoded.email,
             role: decoded["custom:role"] || 'student'
         };
         next();
@@ -83,7 +84,8 @@ app.post('/api/complaints', verifyToken, async (req, res) => {
     try {
         const complaint = await Complaint.create({
             ...req.body,
-            student: req.user.username // Use verified username from token
+            student: req.user.username, // Use verified username from token
+            studentName: req.user.name  // Store the actual display name
         });
         res.status(201).json(complaint);
     } catch (err) { res.status(400).send(err.message); }
@@ -99,7 +101,10 @@ app.get('/api/complaints', verifyToken, async (req, res) => {
     if (category) whereClause.category = category;
     if (status) whereClause.status = status;
 
-    const complaints = await Complaint.findAll({ where: whereClause });
+    const complaints = await Complaint.findAll({
+        where: whereClause,
+        order: [['createdAt', 'DESC']]
+    });
     res.json(complaints);
 });
 
