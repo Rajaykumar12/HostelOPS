@@ -22,6 +22,7 @@ HostelOps is a full-stack complaint management system designed to streamline mai
     * **AWS Cognito:** User Pools and Identity management.
     * **Docker & Docker Compose:** Containerization and orchestration.
     * **Nginx:** Reverse proxy handling web traffic routing.
+    * **GitHub Actions:** Automated CI/CD pipeline.
 
 ---
 
@@ -31,6 +32,18 @@ HostelOps is a full-stack complaint management system designed to streamline mai
 2.  **API Requests:** The frontend attaches the `id_token` as a `Bearer` token in the `Authorization` header for all backend `fetch` requests.
 3.  **Verification:** The Node.js Express backend uses a custom middleware (`verifyToken`) to validate the token's signature against AWS Cognito's public JWKS keys.
 4.  **Authorization:** The backend reads the `custom:role` attribute embedded in the decoded token to grant or deny access to Admin-specific database queries.
+
+---
+
+##  CI/CD Pipeline
+
+HostelOps utilizes **GitHub Actions** for a fully automated Continuous Integration and Continuous Deployment (CI/CD) pipeline. 
+
+Whenever changes are pushed to the `main` branch, the following automated workflow triggers:
+1. **Build & Tag:** GitHub Actions checks out the code, logs into AWS ECR, and builds the latest Docker images for both the `frontend` and `backend`. The images are tagged with both `latest` and a unique `github.sha` commit hash for version control.
+2. **Push to ECR:** The newly built container images are pushed securely to the Amazon Elastic Container Registry (ECR).
+3. **Deploy to EC2:** Upon successful build and push, the pipeline securely connects to the AWS EC2 instance via SSH.
+4. **Automated Rollout:** The EC2 server automatically pulls the new `latest` images from ECR and executes `docker-compose up -d` to seamlessly recreate and restart the application containers in the background with zero downtime.
 
 ---
 
